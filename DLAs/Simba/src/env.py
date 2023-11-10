@@ -27,12 +27,9 @@ class Environment(object):
                  batch_size=4):
         self.debug = bool(debug)
         self.fitness_obj = fitness_obj
-        self.dim_note = ['N', 'K', 'C', 'P', 'Q', 'R', 'S']
-        self.parallizable_dim_note = ['N', 'K', 'C', 'P', 'Q'] if bool(to_par_RS ) is False else self.dim_note
-        self.parallizable_dim_note_set = set(self.parallizable_dim_note)
+        self.dim_note = ['H', 'M', 'K', 'N']
         self.len_dimension = len(self.dim_note)
-        self.timeloop_configfile_path = f'/tmp/out_config_{datetime.now().strftime("%H:%M:%S")}'
-        # self.timeloop_configfile_path = f'./out_config'
+        self.timeloop_configfile_path = f'./tmp/out_config_{datetime.now().strftime("%H:%M:%S")}'
         self.report_dir = report_dir
         self.use_sparse = use_sparse
         self.explore_bypass = explore_bypass
@@ -41,13 +38,11 @@ class Environment(object):
                                         arch_file=arch_file, debug=self.debug,
                                         use_sparse=self.use_sparse, density=self.density)
         self.num_buf_levels = self.timeloop_env.get_num_buffer_levels()
-        # print(f'Number of buffer levels: {self.num_buf_levels}')
         self.buffer_size_list = self.timeloop_env.get_buffer_size_list()
         self.buf_spmap_cstr = self.timeloop_env.get_buffer_spmap_cstr()
         self.buffers_with_spmap = list(self.timeloop_env.get_buffers_with_spmap())
         self.dimension, self.dimension_prime, self.prime2idx = self.timeloop_env.get_dimension_primes()
         self.num_primes = len(self.prime2idx.keys())
-        # print(self.buf_spmap_cstr, self.buffers_with_spmap, self.buffer_size_list, self.prime2idx)
         self.use_pool = bool(use_pool)
         self.use_IO = bool(use_IO)
         self.log_level = log_level
@@ -67,18 +62,16 @@ class Environment(object):
 
         self.set_dimension()
         self.level_order = [5, 2, 4, 1, 3, 6, 2]
-        # self.level_order = [1, 2, 3, 4, 5, 6, 1]
         self.start_level_order = 0
         self.cur_buffer_level = self.level_order[self.start_level_order]
-        self.steps_per_level = 7
+        self.steps_per_level = 4
         self.total_steps = self.num_buf_levels * self.steps_per_level
         self.mode = (self.cur_buffer_level - 1) * self.steps_per_level
         self.time_steps = 0
         self.batch_size = batch_size
-        self.max_tile = 14
+        self.max_tile = 30
 
         self.initial_parallel_mask = np.zeros((self.batch_size, self.len_dimension, 2+1), dtype=np.float)
-        self.initial_parallel_mask[:, 5:, 1:] = float('-inf')
         self.initial_parallel_mask[:, :, 2] = float('-inf')
         self.initial_order_mask = np.zeros((self.batch_size, self.len_dimension + 1), dtype=np.float)
         self.initial_order_mask[:, -1] = float('inf')
@@ -86,30 +79,8 @@ class Environment(object):
         self.tile_budgets = np.zeros((self.batch_size, self.len_dimension, self.num_primes), dtype=np.int32)
         self.initial_tile_masks = np.zeros((self.batch_size, self.len_dimension, self.num_primes, (self.max_tile+1)*2), dtype=np.float)
 
-        # self.initial_tile2_mask_dict = {'K':None, 'C':None, 'P':None, 'Q':None, 'R':None, 'S':None}
-        # self.initial_tile3_mask_dict = {'K':None, 'C':None, 'P':None, 'Q':None, 'R':None, 'S':None}
-        # self.initial_tile7_mask_dict = {'K':None, 'C':None, 'P':None, 'Q':None, 'R':None, 'S':None}
-        # print("buffers_with_spmap", self.buffers_with_spmap)
-        for i, key in enumerate('NKCPQRS'):
+        for i, key in enumerate('HMKN'):
             tile_budget = self.dimension_prime[key]
-            # print(tile_budget, tile_budget.keys())
-            # print(tile_budget['2'], tile_budget['3'], tile_budget['7'])
-            # if '2' in tile_budget:
-            #     self.tile2_budget[:, i] = tile_budget['2']
-            #     self.initial_tile2_mask[:, i, tile_budget['2'] + 1:] = float('-inf')
-            # else:
-            #     self.tile2_budget[:, i] = 0
-            #     self.initial_tile2_mask[:, i, 1:] = float('-inf')
-            # print(self.initial_tile2_mask[0, i])
-            # self.tile3_budget[:, i] = tile_budget['3']
-            # self.initial_tile3_mask[:, i, tile_budget['3'] + 1:] = float('-inf')
-            # print(self.initial_tile3_mask[0, i])
-            # self.tile5_budget[:, i] = tile_budget['5']
-            # self.initial_tile5_mask[:, i, tile_budget['5'] + 1:] = float('-inf')
-            # print(self.initial_tile5_mask[0, i])
-            # self.tile7_budget[:, i] = tile_budget['7']
-            # self.initial_tile7_mask[:, i, tile_budget['7'] + 1:] = float('-inf')
-            # print(self.initial_tile7_mask[0, i])
             for k, v in self.prime2idx.items():
                 self.tile_budgets[:, i, v] = tile_budget[k]
                 self.initial_tile_masks[:, i, v, tile_budget[k] + 1:] = float('-inf')
@@ -117,14 +88,6 @@ class Environment(object):
         self.parallel_mask = copy.deepcopy(self.initial_parallel_mask)
         self.order_mask = copy.deepcopy(self.initial_order_mask)
 
-        # self.tile2_remain_budget = copy.deepcopy(self.tile2_budget)
-        # self.tile3_remain_budget = copy.deepcopy(self.tile3_budget)
-        # self.tile5_remain_budget = copy.deepcopy(self.tile5_budget)
-        # self.tile7_remain_budget = copy.deepcopy(self.tile7_budget)
-        # self.tile2_mask = copy.deepcopy(self.initial_tile2_mask)
-        # self.tile3_mask = copy.deepcopy(self.initial_tile3_mask)
-        # self.tile5_mask = copy.deepcopy(self.initial_tile5_mask)
-        # self.tile7_mask = copy.deepcopy(self.initial_tile7_mask)
         self.tile_remain_budgets = copy.deepcopy(self.tile_budgets)
         self.tile_masks = copy.deepcopy(self.initial_tile_masks)
 
@@ -142,9 +105,6 @@ class Environment(object):
                 self.initial_trg_seq[:, i * self.steps_per_level + j + 1, self.num_primes + 2:] = 0
                 if i == self.num_buf_levels - 1:
                     self.initial_trg_seq[:, i * self.steps_per_level + j + 1, 1: self.num_primes + 1] = self.tile_budgets[:, j]
-                    # self.initial_trg_seq[:, i * self.steps_per_level + j + 1, 2] = self.tile3_budget[:, j]
-                    # self.initial_trg_seq[:, i * self.steps_per_level + j + 1, 3] = self.tile5_budget[:, j]
-                    # self.initial_trg_seq[:, i * self.steps_per_level + j + 1, 4] = self.tile7_budget[:, j]
                 else:
                     self.initial_trg_seq[:, i * self.steps_per_level + j + 1, 1: self.num_primes + 1] = 0
 
@@ -246,11 +206,8 @@ class Environment(object):
             self.final_trg_seq[np.arange(self.batch_size), self.mode, 1: self.num_primes + 1] = tile_actions
             self.final_trg_seq[np.arange(self.batch_size), self.mode, self.num_primes + 1] = parallel_action
             self.final_trg_seq[np.arange(self.batch_size), self.mode, self.num_primes + 2:] = sp_tile_actions
-            # print(seq_disorder_ind, self.mode)
 
             self.order_mask[np.arange(self.batch_size), order_action] = float('inf')
-            # if f'l{self.cur_buffer_level}' not in self.buffers_with_spmap:
-            #     self.parallel_mask[:, :, 1:] = float('-inf')
             self.tile_remain_budgets[np.arange(self.batch_size), order_action] -= tile_actions
             tile_remain_budgets = self.tile_remain_budgets[np.arange(self.batch_size), order_action]
             for i in range(1, self.max_tile+1):
@@ -314,10 +271,6 @@ class Environment(object):
             done = 1
             info = None
             reward_saved = copy.deepcopy(self.get_reward(self.final_trg_seq))
-            # reward_saved[reward_saved==float('-inf')] = self.min_reward
-            # sort_idx = np.argsort(reward_saved)
-            # top_k_idx = sort_idx[int(self.batch_size / 4) - 1]
-            # reward = (reward_saved - reward_saved[top_k_idx])
             reward_saved[reward_saved==float('-inf')] = float('inf')
             if self.min_reward is None:
                 self.min_reward = reward_saved.min()
@@ -325,9 +278,6 @@ class Environment(object):
                 self.min_reward = min(self.min_reward, reward_saved.min())
             reward_saved[reward_saved == float('inf')] = self.min_reward
             reward = reward_saved - self.min_reward
-            # reward_saved[reward_saved==float('inf')] = reward_saved.min()
-            # reward = (reward_saved - reward_saved.min()) / (reward_saved.std() + 1e-12)
-            # self.last_reward = reward_saved
 
         return (trg_seq, trg_mask, order_mask, tile_remain_budgets, tile_masks, parallel_mask,
                 self.mode, self.cur_buffer_level, trg_seq_disorder), reward, done, info
@@ -368,6 +318,7 @@ class Environment(object):
             self.best_sol = sols[best_idx]
             self.create_timeloop_report(self.best_sol, self.report_dir)
         print("Achieved Fitness: ", self.best_fitness, self.mode, fitness[best_idx], (fitness > float('-inf')).sum())
+        print(self.best_sol)
         return fitness
 
     def create_timeloop_report(self, sol, dir_path):

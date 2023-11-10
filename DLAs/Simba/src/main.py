@@ -25,12 +25,6 @@ def set_seed(seed):
 
 
 def compute_policy_loss(rewards, log_probs, log_prob_masks):
-    '''
-    :param rewards: length,batch
-    :param log_probs: length,batch,5
-    :param log_prob_masks: length,batch,5
-    :return:
-    '''
     dis_rewards = []
     gamma = 0.99
     batch_size = log_probs.size(1)
@@ -45,9 +39,6 @@ def compute_policy_loss(rewards, log_probs, log_prob_masks):
     if len(fail_idx) > 3*len(success_idx):
         fail_idx = random.sample(fail_idx, 3*len(success_idx))
     print(len(success_idx), len(fail_idx), rewards[-1, :])
-    # batch_masks = log_probs.new_zeros(batch_size)
-    # batch_masks[success_idx] = 1.
-    # batch_masks[fail_idx] = 1.
 
     rewards = rewards[7:]
     log_probs = log_probs[:-7]
@@ -66,18 +57,6 @@ def compute_policy_loss(rewards, log_probs, log_prob_masks):
     return policy_loss
 
 
-def count_info(func):
-    def float_info():
-        pid = os.getpid()
-        p = psutil.Process(pid)
-        info_start = p.memory_full_info().uss/1024
-        func()
-        info_end=p.memory_full_info().uss/1024
-        print("memoryyyyyyyyy"+str(info_end-info_start)+"KB")
-    return float_info
-
-
-@count_info
 def run():
     opt = parser.parse_args()
     fitness = [opt.fitness1]
@@ -90,58 +69,41 @@ def run():
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    architectures = ['arch_pe']
+    architectures = ['simba']
     for architecture in architectures:
-        dnns = ['gpt1', 'bertlarge', 'gpt3', 'palm']
-        for dnn in dnns:
-            with open(os.path.join(problem_dir, '{}_problems/layers.yaml'.format(dnn)), 'r') as fd:
+        llms = ['bertlarge']
+        for llm in llms:
+            with open(os.path.join(problem_dir, '{}_problems/layers.yaml'.format(llm)), 'r') as fd:
                 layers = yaml.load(fd, Loader=yaml.SafeLoader)
             fd.close()
-            problem = {'problem': {'shape': {'name': 'CNN-Layer', 'dimensions': ['C', 'K', 'R', 'S', 'N', 'P', 'Q'],
-                                             'coefficients': [{'name': 'Wstride', 'default': 1},
-                                                              {'name': 'Hstride', 'default': 1},
-                                                              {'name': 'Wdilation', 'default': 1},
-                                                              {'name': 'Hdilation', 'default': 1}],
-                                             'data-spaces': [
-                                                 {'name': 'Weights',
-                                                  'projection': [[['C']], [['K']], [['R']], [['S']]]},
-                                                 {'name': 'Inputs', 'projection': [[['N']], [['C']],
-                                                                                   [['R', 'Wdilation'],
-                                                                                    ['P', 'Wstride']],
-                                                                                   [['S', 'Hdilation'],
-                                                                                    ['Q', 'Hstride']]]},
-                                                 {'name': 'Outputs', 'projection': [[['N']], [['K']], [['Q']], [['P']]],
-                                                  'read-write': True}]},
-                                   'instance': {'C': 256, 'K': 512, 'R': 3, 'S': 3, 'P': 56, 'Q': 56, 'N': 16}}}
-            input_sizes = [1, 2, 4, 8, 16, 32, 64]
-            # input_sizes = [512]
+            problem = {'problem': {'instance': {'H': 1, 'M': 512, 'K': 1024, 'N': 1024},
+                                   'shape': {'data-spaces':
+                                                 [{'name': 'Weights', 'projection': [[['H']], [['K']], [['N']]]},
+                                                  {'name': 'Inputs', 'projection': [[['H']], [['M']], [['K']]]},
+                                                  {'name': 'Outputs', 'projection': [[['H']], [['M']], [['N']]],
+                                                   'read-write': True}],
+                                             'dimensions': ['H', 'M', 'K', 'N'], 'name': 'bmm'}}}
+            input_sizes = [1]
 
             for input_size in input_sizes:
                 actor_state_dict = None
                 layer2chkpt = {}
-                for i, layer in enumerate(layers):
-                    print(architecture, dnn, input_size, i, layer)
+                for i, layer in enumerate(layers[0:1]):
+                    print(architecture, llm, input_size, i, layer)
                     set_seed(opt.seed)
-                    report_dir = os.path.join(opt.report_dir,  'simba_{}'.format(architecture), 'fitness_{}'.format(opt.fitness1),
+                    report_dir = os.path.join(opt.report_dir, architecture, 'fitness_{}'.format(opt.fitness1),
                                               'sampled_episodes_{}'.format(opt.batch_size),
-                                              '{}_input{}'.format(dnn, input_size), 'layer-{}'.format(i))
-                    with open(os.path.join(problem_dir, '{}_problems/{}.yaml'.format(dnn, layer)), 'r') as fd:
+                                              '{}_input{}'.format(llm, input_size), 'layer-{}'.format(i))
+                    with open(os.path.join(problem_dir, '{}_problems/{}.yaml'.format(llm, layer)), 'r') as fd:
                         layer_problem = yaml.load(fd, Loader=yaml.SafeLoader)
-                        problem['problem']['instance']['N'] *= input_size
+                        problem['problem']['instance']['H'] = layer_problem['problem']['H'] * input_size
+                        problem['problem']['instance']['M'] = layer_problem['problem']['M']
                         problem['problem']['instance']['K'] = layer_problem['problem']['K']
-                        problem['problem']['instance']['C'] = layer_problem['problem']['C']
-                        problem['problem']['instance']['P'] = layer_problem['problem']['P']
-                        problem['problem']['instance']['Q'] = layer_problem['problem']['Q']
-                        problem['problem']['instance']['R'] = layer_problem['problem']['R']
-                        problem['problem']['instance']['S'] = layer_problem['problem']['S']
-                        problem['problem']['instance']['Wstride'] = layer_problem['problem']['Wstride']
-                        problem['problem']['instance']['Hstride'] = layer_problem['problem']['Hstride']
-                        problem['problem']['instance']['Wdilation'] = layer_problem['problem']['Wdilation']
-                        problem['problem']['instance']['Hdilation'] = layer_problem['problem']['Hdilation']
+                        problem['problem']['instance']['N'] = layer_problem['problem']['N']
                     fd.close()
 
                     layer_to_key = ''
-                    for key in ['R', 'S', 'P', 'Q', 'C', 'K', 'Wstride', 'Hstride', 'Wdilation', 'Hdilation']:
+                    for key in ['H', 'M', 'K', 'N']:
                         layer_to_key += str(problem['problem']['instance'][key]) + ' '
 
                     if layer_to_key in layer2chkpt:
@@ -165,14 +127,11 @@ def run():
                         actor = Actor(opt.d_model, opt.d_inner, opt.n_layers, opt.n_head, opt.d_k, opt.d_v,
                                       env.buf_spmap_cstr, env.buffer_size_list, env.steps_per_level,
                                       problem['problem']['instance'], env.prime2idx).to(device)
-                        # if actor_state_dict is not None:
-                        #     actor.load_state_dict(actor_state_dict)
                         actor.train()
 
                         optimizer = ScheduledOptim(
                             optim.Adam(actor.parameters(), betas=(0.9, 0.98), eps=1e-09),
                             opt.lr_mul, opt.d_model, opt.n_warmup_steps)
-                        # optimizer = optim.Adam(actor.parameters(), lr=1e-3, betas=(0.9, 0.999))
 
                         for ep in range(opt.epochs):
                             print('Epoch {}'.format(ep))
@@ -212,13 +171,6 @@ def run():
                             total_log_prob_masks = torch.stack(total_log_prob_masks, dim=0)
                             policy_loss = compute_policy_loss(total_rewards, total_log_probs, total_log_prob_masks)
                             policy_loss.backward()
-                            print(policy_loss)
-                            # if (ep+1) % 10 == 0:
-                            for param_group in optimizer._optimizer.param_groups:
-                                # param_group['lr'] *= 0.8
-                                print(param_group['lr'])
-                            # torch.nn.utils.clip_grad_norm_(actor.parameters(), 10)
-                            # optimizer.step()
                             optimizer.step_and_update_lr()
 
                             chkpt = env.record_chkpt(ep == opt.epochs - 1)
@@ -242,7 +194,7 @@ if __name__ == '__main__':
     parser.add_argument('--explore_bypass', action='store_true', default=False,
                         help='Enable it can add bypass buffer option in to the search space')
 
-    parser.add_argument('--dnn', type=str, default=None, help='dnn model')
+    parser.add_argument('--llm', type=str, default=None, help='large language model')
     parser.add_argument('--input_size', type=int, default=1, help='the size of dimension N')
     parser.add_argument('--architecture', type=str, default='arch', help='accelerator architecture')
 

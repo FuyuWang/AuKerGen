@@ -56,7 +56,7 @@ class Decoder(nn.Module):
 
         self.order_size = 7 + 1      # NKCYXRS + 1
         self.order_emb = nn.Embedding(self.order_size, d_word_vec, padding_idx=pad_idx)
-        self.tile_size = 14 + 1      # 12+1(start)
+        self.tile_size = 30 + 1      # 12+1(start)
         # self.tile2_emb = nn.Embedding(self.tile_size, d_word_vec, padding_idx=pad_idx)
         # self.tile3_emb = nn.Embedding(self.tile_size, d_word_vec, padding_idx=pad_idx)
         # self.tile5_emb = nn.Embedding(self.tile_size, d_word_vec, padding_idx=pad_idx)
