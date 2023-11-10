@@ -61,22 +61,6 @@ class TimeloopEnv(object):
         self.prime2idx = {pf: i for i, pf in enumerate(primes)}
         self.num_primes = len(self.prime2idx.keys())
 
-        # self.bypass_dict = {}
-        # for i in range(self.num_buffer_level, 0, -1):
-        #     if i == 6:  # DRAM
-        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':False, 'Weights': False, 'Outputs': False}
-        #     elif i == 5:    # GlobalBuffer
-        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':False, 'Weights': True, 'Outputs': False}
-        #     elif i == 4:    # PEInputBuffer
-        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':False, 'Weights': True, 'Outputs': True}
-        #     elif i == 3:    # PEWeightBuffer
-        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':True, 'Weights': False, 'Outputs': True}
-        #     elif i == 2:    # PEAccBuffer
-        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':True, 'Weights': True, 'Outputs': False}
-        #     elif i == 1:     # PEWeightReg
-        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':True, 'Weights': False, 'Outputs': True}
-        # print(self.bypass_dict)
-
     def get_default_buffer_energy_cost(self):
         buf_energy_cost = {'DRAM': 200,
                            'l2': 2.2,
@@ -219,7 +203,6 @@ class TimeloopEnv(object):
             instances *= (int(macc.split('..')[1].split(']')[0]) + 1)
         num_instances.append(instances)
 
-
         sp_cstr = []
         for i in range(len(num_instances) - 1):
             allowed_sp_size = num_instances[i + 1] // num_instances[i]
@@ -227,8 +210,6 @@ class TimeloopEnv(object):
             if num_instances[i + 1] % num_instances[i] != 0:
                 raise ValueError('Invalid Architecture File. '
                                  'Buffer hierarchy not perfectly divisible.')
-
-        print(buffer_name_list, num_instances, buffer_size_list, num_pes, sp_cstr)
 
         return {f'l{level}': name for level, name in zip(np.arange(num_buffer_levels, 0, -1), buffer_name_list)}, \
                {f'l{level}': name for level, name in zip(np.arange(num_buffer_levels, 0, -1), buffer_size_list)}, \
@@ -378,12 +359,9 @@ class TimeloopEnv(object):
 
     def get_map_config(self, sol):
         steps_per_level = 4
-        # sol [level*steps_per_level, 5]
         dim2note = {0: 'H', 1: 'M', 2: 'K', 3: 'N'}
         mapping = []
-        # self.check_tile_fit_buffer(sol)
         num_primes = len(self.prime2idx.keys())
-        # print(sol.shape, sol, num_primes,self.prime2idx)
 
         for level in range(1, self.num_buffer_level+1):
             target = self.buffer_name_list[f'l{level}']
@@ -402,13 +380,6 @@ class TimeloopEnv(object):
                     tile_sizes_dict[note] *= pow(int(k), level_sol[i, int(v) + 1])
                 sp_tile_sizes_dict[note] = pow(2, level_sol[i, num_primes + 2])
 
-            # bypass = self.bypass_dict[self.buffer_name_list[f'l{level}']]
-            # to_pass, to_keep = self.get_bypass(bypass)
-            # bypass_map = {'target': target,
-            #               'type': 'bypass',
-            #               'keep': to_keep,
-            #               'bypass': to_pass
-            #             }
             bypass_map = self.mapspace['mapspace']['constraints'][level - 1]
 
             tp_tile_sizes, sp_tile_sizes = self.get_tp_sp_tile_size(tile_sizes_dict, par_dims, sp_tile_sizes_dict)
@@ -432,14 +403,7 @@ class TimeloopEnv(object):
                            }
                 mapping.append(cur_map)
             mapping.append(bypass_map)
-            # else:
-            #     tp_tile_sizes = self.get_tp_tile_size(tile_sizes)
-            #     cur_map = {'target': target,
-            #                'type': 'temporal',
-            #                'factors': tp_tile_sizes,
-            #                'permutation': permutation,
-            #                }
-            #     mapping.append(cur_map)
+
         return {'mapping': mapping}
 
     def get_configs(self, dimension, sol):
@@ -472,7 +436,6 @@ class TimeloopEnv(object):
     def run_timeloop(self, dimension,  sol,
                                pool_idx=0, use_IO=False, fitness_obj=['latency']):
         arch, problem, map = self.get_configs(dimension, sol)
-        # print("pool_idx  ", pool_idx, sol, map)
         if use_IO:
             self.write_config(arch, problem, map, arch_path=self.arch_path[pool_idx],
                               problem_path=self.problem_path[pool_idx], map_path=self.map_path[pool_idx], sparse_path=self.sparse_path[pool_idx])
@@ -488,7 +451,6 @@ class TimeloopEnv(object):
             else:
                 try:
                     stats = parse_timeloop_stats(self.pool_path[pool_idx])
-                    # stats = extract_timeloop_perf(self.pool_path[pool_idx])
                     fitness = self.judge_IO(stats, fitness_obj)
                 except Exception as e:
                     print("Exception: ", e)
@@ -518,7 +480,6 @@ class TimeloopEnv(object):
                 timeloop_app = Model(config,'.')
                 eval_stats = timeloop_app.run()
                 fitness = self.judge(eval_stats, fitness_obj)
-                # print(fitness)
             return fitness
 
     def judge_IO(self, stats, fitness_obj='all'):

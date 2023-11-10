@@ -99,7 +99,7 @@ class Actor(nn.Module):
 
                 H_sub = trg_seq_disorder.new_zeros(batch_size).float()
                 M_sub = weight_tile
-                K_sub = output_tile
+                K_sub = trg_seq_disorder.new_zeros(batch_size).float()
                 N_sub = input_tile
 
                 H_coef = input_tile + weight_tile + output_tile
