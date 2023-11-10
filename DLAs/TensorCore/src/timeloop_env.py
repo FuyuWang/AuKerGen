@@ -47,13 +47,13 @@ class TimeloopEnv(object):
         self.buf_energy_cost = self.get_default_buffer_energy_cost()
         self.density = density
 
-        self.dim_note = ['N', 'K', 'C', 'P', 'Q', 'R', 'S']
+        self.dim_note = ['H', 'M', 'K', 'N']
         self.dimension, self.dimension_dict = self.get_problem_info()
         self.dimension_prime = {key: self.get_prime_factors(self.dimension_dict[key]) for key in self.dim_note}
 
         self.prime2idx = {}
         primes = set()
-        for i, key in enumerate('NKCPQRS'):
+        for i, key in enumerate('HMKN'):
             tile_budget = self.dimension_prime[key]
             for k in tile_budget.keys():
                 primes.add(k)
@@ -125,12 +125,12 @@ class TimeloopEnv(object):
         return self.dimension, self.dimension_prime, self.prime2idx
 
     def get_problem_info(self):
-        dim_note = 'NKCPQRS'
+        dim_note = 'HMKN'
         problem = copy.deepcopy(self.problem)
         dimension = []
         dimension_dicts = {}
         for key in dim_note:
-            value = problem['problem']['instance'][self.get_timeloop_notation(key)]
+            value = problem['problem']['instance'][key]
             dimension.append(value)
             dimension_dicts[key] = value
         return dimension, dimension_dicts
@@ -235,21 +235,16 @@ class TimeloopEnv(object):
                {f'l{level}': name for level, name in zip(np.arange(num_buffer_levels, 0, -1), sp_cstr)}, \
                num_buffer_levels, num_pes
 
-    def get_timeloop_notation(self, g):
-        # timeloop_dict = {'N': 'N', 'K': 'M', 'C': 'C', 'Y': 'P', 'X': 'Q', 'R': 'R', 'S': 'S'}
-        timeloop_dict = {'N': 'N', 'K': 'K', 'C': 'C', 'P': 'P', 'Q': 'Q', 'R': 'R', 'S': 'S'}
-        return timeloop_dict[g]
-
     def get_dimension_dict(self, dim_value):
-        dim_note = 'NKCPQRS'
+        dim_note = 'HMKN'
         return {note: value for note, value in zip(dim_note, dim_value)}
 
     def init_tp_tile_size(self):
-        series =  [f'{self.get_timeloop_notation(note)}={1}' for note in 'NKCPQRS']
+        series =  [f'{note}={1}' for note in 'HMKN']
         return ' '.join(series)
 
     def get_tp_tile_size(self, dim_value):
-        series =  [f'{self.get_timeloop_notation(note)}={value}' for note, value in dim_value.items()]
+        series =  [f'{note}={value}' for note, value in dim_value.items()]
         return ' '.join(series)
 
     def get_tp_sp_tile_size(self, dim_value, sp_dim, sp_dim_value, timeloop_notation=True):
@@ -258,18 +253,18 @@ class TimeloopEnv(object):
             spatial_series = []
             for note, value in dim_value.items():
                 if note not in sp_dim:
-                    temporal_series.append(f'{self.get_timeloop_notation(note)}={value}')
-                    spatial_series.append(f'{self.get_timeloop_notation(note)}=1')
+                    temporal_series.append(f'{note}={value}')
+                    spatial_series.append(f'{note}=1')
                 else:
                     sp_value = sp_dim_value[note]
                     tp_value = value // sp_value
-                    temporal_series.append(f'{self.get_timeloop_notation(note)}={tp_value}')
-                    spatial_series.append(f'{self.get_timeloop_notation(note)}={sp_value}')
+                    temporal_series.append(f'{note}={tp_value}')
+                    spatial_series.append(f'{note}={sp_value}')
             return ' '.join(temporal_series), ' '.join(spatial_series)
         else:
             temporal_series = []
             spatial_series = []
-            for note in 'NKCPQRS':
+            for note in 'HMKN':
                 if note not in sp_dim:
                     temporal_series.append(dim_value[note])
                     spatial_series.append(1)
@@ -281,7 +276,7 @@ class TimeloopEnv(object):
             return np.array(temporal_series), np.array(spatial_series)
 
     def get_loop_order(self, loop_order):
-        series = [self.get_timeloop_notation(g) for g in loop_order]
+        series = [g for g in loop_order]
         return ''.join(series)
 
     def create_pool_env(self, num_pools, dimension, sol, use_IO=False):
@@ -331,7 +326,7 @@ class TimeloopEnv(object):
         problem =  copy.deepcopy(self.problem)
         dimension_dict = self.get_dimension_dict(dimension)
         for key, value in dimension_dict.items():
-            problem['problem']['instance'][self.get_timeloop_notation(key)] = value
+            problem['problem']['instance'][key] = value
         if self.use_sparse:
             problem['problem']['instance']['densities'] = {}
             for key in ['Inputs', 'Weights', 'Outputs']:
@@ -355,14 +350,14 @@ class TimeloopEnv(object):
         return to_pass, to_keep
 
     def get_input_weight_output_tile(self, tiles):
-        N, K, C, Y, X, R, S = tiles
-        input_tile, weight_tile, output_tile = N*(Y+R-1)*(X+S-1)*C, K*R*S*C, Y*X*K*N
+        H, M, K, N = tiles
+        input_tile, weight_tile, output_tile = H*M*K, H*K*N, H*M*N
         return input_tile, weight_tile, output_tile
 
     def get_ideal_perf(self, dimension):
-        N, K, C, Y, X, R, S = dimension
-        input_size, weight_size, output_size = [N*Y*X*C, R*S*C*K, N*Y*X*K] # Input, weight, output
-        num_flops = N*R*S*C*Y*X*K
+        H, M, K, N = dimension
+        input_size, weight_size, output_size = [H*M*K, H*K*N, H*M*N] # Input, weight, output
+        num_flops = H * M * K * N
         energys = {}
         for level in range(1, self.num_buffer_level+1):
             if level == 1:
@@ -382,12 +377,14 @@ class TimeloopEnv(object):
         return edp, cycles, energy
 
     def get_map_config(self, sol):
-        steps_per_level = 7
+        steps_per_level = 4
         # sol [level*steps_per_level, 5]
-        dim2note = {0: 'N', 1: 'K', 2: 'C', 3: 'P', 4: 'Q', 5: 'R', 6: 'S'}
+        dim2note = {0: 'H', 1: 'M', 2: 'K', 3: 'N'}
         mapping = []
         # self.check_tile_fit_buffer(sol)
         num_primes = len(self.prime2idx.keys())
+        # print(sol.shape, sol, num_primes,self.prime2idx)
+
         for level in range(1, self.num_buffer_level+1):
             target = self.buffer_name_list[f'l{level}']
             level_sol = sol[(level-1)*steps_per_level:level*steps_per_level,:]
