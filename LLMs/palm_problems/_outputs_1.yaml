@@ -1,13 +1,6 @@
 problem:
-  C: 256
-  Hdilation: 1
-  Hstride: 1
-  K: 2048
-  N: 147456
-  P: 1
-  Q: 1
-  R: 1
-  S: 1
-  Wdilation: 1
-  Wstride: 1
-  shape: cnn-layer
+  H: 72
+  M: 2048
+  K: 256
+  N: 2048
+  shape: bmm
