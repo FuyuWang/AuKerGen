@@ -3,4 +3,4 @@ problem:
   M: 512
   K: 3072
   N: 768
-  shape: bmm
+  shape: gemm

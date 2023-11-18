@@ -3,4 +3,4 @@ problem:
   M: 2048
   K: 12288
   N: 49152
-  shape: bmm
+  shape: gemm
