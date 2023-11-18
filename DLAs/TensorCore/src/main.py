@@ -96,10 +96,16 @@ def run():
                                               '{}_input{}'.format(llm, input_size), 'layer-{}'.format(i))
                     with open(os.path.join(problem_dir, '{}_problems/{}.yaml'.format(llm, layer)), 'r') as fd:
                         layer_problem = yaml.load(fd, Loader=yaml.SafeLoader)
-                        problem['problem']['instance']['H'] = layer_problem['problem']['H'] * input_size
-                        problem['problem']['instance']['M'] = layer_problem['problem']['M']
+                        print(layer_problem['problem']['shape'])
+                        if layer_problem['problem']['shape'] == 'bmm':
+                            problem['problem']['instance']['H'] = layer_problem['problem']['H'] * input_size
+                            problem['problem']['instance']['M'] = layer_problem['problem']['M']
+                        else:
+                            problem['problem']['instance']['H'] = layer_problem['problem']['H']
+                            problem['problem']['instance']['M'] = layer_problem['problem']['M'] * input_size
                         problem['problem']['instance']['K'] = layer_problem['problem']['K']
                         problem['problem']['instance']['N'] = layer_problem['problem']['N']
+                        problem['problem']['shape']['name'] = layer_problem['problem']['shape']
                     fd.close()
 
                     layer_to_key = ''

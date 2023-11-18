@@ -1,58 +1,30 @@
 problem:
   instance:
-    C: 3
-    Hdilation: 1
-    Hstride: 2
-    K: 64
-    N: 1
-    P: 112
-    Q: 112
-    R: 7
-    S: 7
-    Wdilation: 1
-    Wstride: 2
+    H: 1
+    K: 1024
+    M: 512
+    N: 1024
   shape:
-    coefficients:
-    - default: 1
-      name: Wstride
-    - default: 1
-      name: Hstride
-    - default: 1
-      name: Wdilation
-    - default: 1
-      name: Hdilation
     data-spaces:
     - name: Weights
       projection:
-      - - - C
+      - - - H
       - - - K
-      - - - R
-      - - - S
+      - - - N
     - name: Inputs
       projection:
-      - - - N
-      - - - C
-      - - - R
-          - Wdilation
-        - - P
-          - Wstride
-      - - - S
-          - Hdilation
-        - - Q
-          - Hstride
+      - - - H
+      - - - M
+      - - - K
     - name: Outputs
       projection:
+      - - - H
+      - - - M
       - - - N
-      - - - K
-      - - - Q
-      - - - P
       read-write: true
     dimensions:
-    - C
+    - H
+    - M
     - K
-    - R
-    - S
     - N
-    - P
-    - Q
-    name: CNN-Layer
+    name: bmm
