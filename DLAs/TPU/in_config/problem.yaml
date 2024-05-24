@@ -1,0 +1,26 @@
+problem:
+  instance:
+    H: 1
+    M: 512
+    K: 1024
+    N: 1024
+  shape:
+    data-spaces:
+    - name: Weights
+      projection:
+        - [ [ H ] ]
+        - [ [ K ] ]
+        - [ [ N ] ]
+    - name: Inputs
+      projection:
+        - [ [H] ]
+        - [ [M] ]
+        - [ [K] ]
+    - name: Outputs
+      projection:
+        - [ [ H ] ]
+        - [ [ M ] ]
+        - [ [ N ] ]
+      read-write: true
+    dimensions: [H, M, K, N]
+    name: bmm

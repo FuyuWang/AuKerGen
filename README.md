@@ -17,10 +17,10 @@ pip install -r requirements.txt
 
 * Install [Timeloop](https://timeloop.csail.mit.edu/timeloop)
 
-### Run AuKerGen on Tensorcore ###
+### Run AuKerGen on Simba ###
 
 ```
-cd DLAs/TensorCore
+cd DLAs/Simba
 sh run.sh
 ```
 

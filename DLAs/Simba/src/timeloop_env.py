@@ -9,8 +9,6 @@ from functools import reduce
 from collections import defaultdict, OrderedDict
 from subprocess import Popen, PIPE, call
 from parse_timeloop_output import parse_timeloop_stats
-# from pytimeloop.app import Model
-# from pytimeloop import ConfigDict
 from utils import *
 import re
 
@@ -56,9 +54,9 @@ class TimeloopEnv(object):
         for i, key in enumerate('HMKN'):
             tile_budget = self.dimension_prime[key]
             for k in tile_budget.keys():
-                primes.add(k)
+                primes.add(int(k))
         primes = sorted(primes)
-        self.prime2idx = {pf: i for i, pf in enumerate(primes)}
+        self.prime2idx = {'{}'.format(pf): i for i, pf in enumerate(primes)}
         self.num_primes = len(self.prime2idx.keys())
 
     def get_default_buffer_energy_cost(self):
@@ -423,50 +421,24 @@ class TimeloopEnv(object):
     def run_timeloop(self, dimension,  sol,
                                pool_idx=0, use_IO=False, fitness_obj=['latency']):
         arch, problem, map = self.get_configs(dimension, sol)
-        if use_IO:
-            self.write_config(arch, problem, map, arch_path=self.arch_path[pool_idx],
-                              problem_path=self.problem_path[pool_idx], map_path=self.map_path[pool_idx], sparse_path=self.sparse_path[pool_idx])
-            command = [self._executable, self.arch_path[pool_idx], self.problem_path[pool_idx], self.map_path[pool_idx]]
-            if self.use_sparse:
-                command += [self.sparse_path[pool_idx]]
-            process = Popen(command, stdout=PIPE, stderr=PIPE, cwd=self.pool_path[pool_idx])
-            stdout, stderr = process.communicate()
-            process.wait()
-            if stderr:
-                print("stderrstderr: ", stderr, sol)
-                return [-float('Inf')] * len(fitness_obj)
-            else:
-                try:
-                    stats = parse_timeloop_stats(self.pool_path[pool_idx])
-                    fitness = self.judge_IO(stats, fitness_obj)
-                except Exception as e:
-                    print("Exception: ", e)
-                    fitness = [-float('Inf')] * len(fitness_obj)
-                return fitness
+        self.write_config(arch, problem, map, arch_path=self.arch_path[pool_idx],
+                          problem_path=self.problem_path[pool_idx], map_path=self.map_path[pool_idx], sparse_path=self.sparse_path[pool_idx])
+        command = [self._executable, self.arch_path[pool_idx], self.problem_path[pool_idx], self.map_path[pool_idx]]
+        if self.use_sparse:
+            command += [self.sparse_path[pool_idx]]
+        process = Popen(command, stdout=PIPE, stderr=PIPE, cwd=self.pool_path[pool_idx])
+        stdout, stderr = process.communicate()
+        process.wait()
+        if stderr:
+            print("stderrstderr: ", stderr, sol)
+            return [-float('Inf')] * len(fitness_obj)
         else:
-            # cfg = {}
-            # cfg.update(arch)
-            # cfg.update(map)
-            # cfg.update(problem)
-            # cfg.update(self.art)
-            # cfg.update(self.ert)
-            cfg = copy.deepcopy(self.shared_cfg)
-            cfg.update(map)
-            config = ConfigDict(cfg)
-            if not self.debug:
-                with stdout_redirected():
-                    try:
-                        timeloop_app = Model(config,'.')
-                        eval_stats = timeloop_app.run()
-                        fitness = self.judge(eval_stats, fitness_obj)
-                    except:
-                        fitness = [-float('Inf')] * len(fitness_obj)
-            else:
-                # print(sol)
-                self.dump_timeloop_config_files(dimension, sol, './report/')
-                timeloop_app = Model(config,'.')
-                eval_stats = timeloop_app.run()
-                fitness = self.judge(eval_stats, fitness_obj)
+            try:
+                stats = parse_timeloop_stats(self.pool_path[pool_idx])
+                fitness = self.judge_IO(stats, fitness_obj)
+            except Exception as e:
+                print("Exception: ", e)
+                fitness = [-float('Inf')] * len(fitness_obj)
             return fitness
 
     def judge_IO(self, stats, fitness_obj='all'):

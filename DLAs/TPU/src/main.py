@@ -1,5 +1,4 @@
 import os
-import psutil
 import yaml
 import pickle
 
@@ -68,7 +67,7 @@ def run():
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    architectures = ['tensorcore']
+    architectures = ['tpu']
     for architecture in architectures:
         llms = ['bertlarge']
         for llm in llms:

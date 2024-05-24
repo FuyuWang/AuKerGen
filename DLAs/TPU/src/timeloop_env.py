@@ -9,6 +9,8 @@ from functools import reduce
 from collections import defaultdict, OrderedDict
 from subprocess import Popen, PIPE, call
 from parse_timeloop_output import parse_timeloop_stats
+# from pytimeloop.app import Model
+# from pytimeloop import ConfigDict
 from utils import *
 import re
 
@@ -54,10 +56,26 @@ class TimeloopEnv(object):
         for i, key in enumerate('HMKN'):
             tile_budget = self.dimension_prime[key]
             for k in tile_budget.keys():
-                primes.add(int(k))
+                primes.add(k)
         primes = sorted(primes)
-        self.prime2idx = {'{}'.format(pf): i for i, pf in enumerate(primes)}
+        self.prime2idx = {pf: i for i, pf in enumerate(primes)}
         self.num_primes = len(self.prime2idx.keys())
+
+        # self.bypass_dict = {}
+        # for i in range(self.num_buffer_level, 0, -1):
+        #     if i == 6:  # DRAM
+        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':False, 'Weights': False, 'Outputs': False}
+        #     elif i == 5:    # GlobalBuffer
+        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':False, 'Weights': True, 'Outputs': False}
+        #     elif i == 4:    # PEInputBuffer
+        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':False, 'Weights': True, 'Outputs': True}
+        #     elif i == 3:    # PEWeightBuffer
+        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':True, 'Weights': False, 'Outputs': True}
+        #     elif i == 2:    # PEAccBuffer
+        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':True, 'Weights': True, 'Outputs': False}
+        #     elif i == 1:     # PEWeightReg
+        #         self.bypass_dict[self.buffer_name_list[f'l{i}']] = {'Inputs':True, 'Weights': False, 'Outputs': True}
+        # print(self.bypass_dict)
 
     def get_default_buffer_energy_cost(self):
         buf_energy_cost = {'DRAM': 200,
@@ -125,9 +143,9 @@ class TimeloopEnv(object):
         num_buffer_levels = 0
         arch = arch['architecture']
 
-        main_memory = arch['subtree'][0]
+        main_memory = arch['subtree'][0]['local'][0]
         buffer_name = main_memory['name']
-        attributes = main_memory['local'][0]['attributes']
+        attributes = main_memory['attributes']
         depth = attributes['depth'] if 'depth' in attributes else float('Inf')
         word_bits = attributes['word-bits'] if 'word-bits' in attributes else 8
         width = attributes['width'] if 'width' in attributes else 8
@@ -137,69 +155,61 @@ class TimeloopEnv(object):
         re_ret = re.search('.*\[', buffer_name)
         if re_ret:
             instances = int(buffer_name.split('..')[1].split(']')[0]) + 1
-        buffer_name = main_memory['local'][0]['name']
+            buffer_name = re_ret.group(0)[:-1]
         buffer_name_list.append(buffer_name)
         buffer_size_list.append(buffer_size)
         num_instances.append(instances)
         num_buffer_levels += 1
 
-        global_buffer = arch['subtree'][0]['subtree'][0]
+        global_buffer = arch['subtree'][0]['subtree'][0]['local'][0]
         buffer_name = global_buffer['name']
-        attributes = global_buffer['local'][0]['attributes']
+        attributes = global_buffer['attributes']
         depth = attributes['depth'] if 'depth' in attributes else float('Inf')
         word_bits = attributes['word-bits'] if 'word-bits' in attributes else 8
         width = attributes['width'] if 'width' in attributes else 8
         block_size = attributes['block-size'] if 'block-size' in attributes else 1
         buffer_size = depth * block_size
+        instances = 1
         re_ret = re.search('.*\[', buffer_name)
         if re_ret:
-            instances *= int(buffer_name.split('..')[1].split(']')[0]) + 1
-        buffer_name = global_buffer['local'][0]['name']
+            instances = int(buffer_name.split('..')[1].split(']')[0]) + 1
+            buffer_name = re_ret.group(0)[:-1]
         buffer_name_list.append(buffer_name)
         buffer_size_list.append(buffer_size)
         num_instances.append(instances)
         num_buffer_levels += 1
 
-        local_buffer = arch['subtree'][0]['subtree'][0]['subtree'][0]
+        pe = arch['subtree'][0]['subtree'][0]['subtree'][0]
+        num_pes = 1
+
+        local_buffer = pe['local'][0]
         buffer_name = local_buffer['name']
-        attributes = local_buffer['local'][0]['attributes']
+        attributes = local_buffer['attributes']
         depth = attributes['depth'] if 'depth' in attributes else float('Inf')
         word_bits = attributes['word-bits'] if 'word-bits' in attributes else 8
         width = attributes['width'] if 'width' in attributes else 8
         block_size = attributes['block-size'] if 'block-size' in attributes else 1
         buffer_size = depth * block_size
+        instances = 1
         re_ret = re.search('.*\[', buffer_name)
         if re_ret:
-            instances *= int(buffer_name.split('..')[1].split(']')[0]) + 1
-        buffer_name = local_buffer['local'][0]['name']
+            instances = int(buffer_name.split('..')[1].split(']')[0]) + 1
+            buffer_name = re_ret.group(0)[:-1]
+        instances *= num_pes
         buffer_name_list.append(buffer_name)
         buffer_size_list.append(buffer_size)
         num_instances.append(instances)
         num_buffer_levels += 1
 
-        pe_buffer = arch['subtree'][0]['subtree'][0]['subtree'][0]['subtree'][0]
-        buffer_name = pe_buffer['name']
-        attributes = pe_buffer['local'][0]['attributes']
-        depth = attributes['depth'] if 'depth' in attributes else float('Inf')
-        word_bits = attributes['word-bits'] if 'word-bits' in attributes else 8
-        width = attributes['width'] if 'width' in attributes else 8
-        block_size = attributes['block-size'] if 'block-size' in attributes else 1
-        buffer_size = depth * block_size
-        re_ret = re.search('.*\[', buffer_name)
-        if re_ret:
-            instances *= int(buffer_name.split('..')[1].split(']')[0]) + 1
-        buffer_name = pe_buffer['local'][0]['name']
-        buffer_name_list.append(buffer_name)
-        buffer_size_list.append(buffer_size)
-        num_instances.append(instances)
-        num_buffer_levels += 1
-        num_pes = instances
-
-        macc = arch['subtree'][0]['subtree'][0]['subtree'][0]['subtree'][0]['local'][1]['name']
+        macc = pe['local'][-1]['name']
         re_ret = re.search('.*\[', macc)
         if re_ret:
-            instances *= (int(macc.split('..')[1].split(']')[0]) + 1)
+            instances = (int(macc.split('..')[1].split(']')[0]) + 1) * num_pes
+        else:
+            instances = num_pes
         num_instances.append(instances)
+
+        print(buffer_name_list, num_instances, buffer_size_list)
 
         sp_cstr = []
         for i in range(len(num_instances) - 1):
@@ -208,6 +218,8 @@ class TimeloopEnv(object):
             if num_instances[i + 1] % num_instances[i] != 0:
                 raise ValueError('Invalid Architecture File. '
                                  'Buffer hierarchy not perfectly divisible.')
+
+        print(buffer_name_list, buffer_size_list, sp_cstr)
 
         return {f'l{level}': name for level, name in zip(np.arange(num_buffer_levels, 0, -1), buffer_name_list)}, \
                {f'l{level}': name for level, name in zip(np.arange(num_buffer_levels, 0, -1), buffer_size_list)}, \
@@ -350,16 +362,19 @@ class TimeloopEnv(object):
             energys[f'l{level}-Outputs'] = output_size * buf_energy_cost
         energys['compute'] = num_flops * self.buf_energy_cost['MAC']
         energy = sum(e for e in energys.values()) * 1e-6  # energy_uJ
-        # cycles = num_flops/self.num_pes
-        cycles = num_flops/(self.num_pes-1)
+        cycles = num_flops/self.num_pes
+        # cycles = num_flops/(self.num_pes-1)
         edp = cycles * energy
         return edp, cycles, energy
 
     def get_map_config(self, sol):
         steps_per_level = 4
+        # sol [level*steps_per_level, 5]
         dim2note = {0: 'H', 1: 'M', 2: 'K', 3: 'N'}
         mapping = []
+        # self.check_tile_fit_buffer(sol)
         num_primes = len(self.prime2idx.keys())
+        # print(sol.shape, sol, num_primes,self.prime2idx)
 
         for level in range(1, self.num_buffer_level+1):
             target = self.buffer_name_list[f'l{level}']
@@ -378,6 +393,13 @@ class TimeloopEnv(object):
                     tile_sizes_dict[note] *= pow(int(k), level_sol[i, int(v) + 1])
                 sp_tile_sizes_dict[note] = pow(2, level_sol[i, num_primes + 2])
 
+            # bypass = self.bypass_dict[self.buffer_name_list[f'l{level}']]
+            # to_pass, to_keep = self.get_bypass(bypass)
+            # bypass_map = {'target': target,
+            #               'type': 'bypass',
+            #               'keep': to_keep,
+            #               'bypass': to_pass
+            #             }
             bypass_map = self.mapspace['mapspace']['constraints'][level - 1]
 
             tp_tile_sizes, sp_tile_sizes = self.get_tp_sp_tile_size(tile_sizes_dict, par_dims, sp_tile_sizes_dict)
@@ -401,7 +423,14 @@ class TimeloopEnv(object):
                            }
                 mapping.append(cur_map)
             mapping.append(bypass_map)
-
+            # else:
+            #     tp_tile_sizes = self.get_tp_tile_size(tile_sizes)
+            #     cur_map = {'target': target,
+            #                'type': 'temporal',
+            #                'factors': tp_tile_sizes,
+            #                'permutation': permutation,
+            #                }
+            #     mapping.append(cur_map)
         return {'mapping': mapping}
 
     def get_configs(self, dimension, sol):
@@ -434,24 +463,53 @@ class TimeloopEnv(object):
     def run_timeloop(self, dimension,  sol,
                                pool_idx=0, use_IO=False, fitness_obj=['latency']):
         arch, problem, map = self.get_configs(dimension, sol)
-        self.write_config(arch, problem, map, arch_path=self.arch_path[pool_idx],
-                          problem_path=self.problem_path[pool_idx], map_path=self.map_path[pool_idx], sparse_path=self.sparse_path[pool_idx])
-        command = [self._executable, self.arch_path[pool_idx], self.problem_path[pool_idx], self.map_path[pool_idx]]
-        if self.use_sparse:
-            command += [self.sparse_path[pool_idx]]
-        process = Popen(command, stdout=PIPE, stderr=PIPE, cwd=self.pool_path[pool_idx])
-        stdout, stderr = process.communicate()
-        process.wait()
-        if stderr:
-            print("stderrstderr: ", stderr, sol)
-            return [-float('Inf')] * len(fitness_obj)
+        # print("pool_idx  ", pool_idx, sol, map)
+        if use_IO:
+            self.write_config(arch, problem, map, arch_path=self.arch_path[pool_idx],
+                              problem_path=self.problem_path[pool_idx], map_path=self.map_path[pool_idx], sparse_path=self.sparse_path[pool_idx])
+            command = [self._executable, self.arch_path[pool_idx], self.problem_path[pool_idx], self.map_path[pool_idx]]
+            if self.use_sparse:
+                command += [self.sparse_path[pool_idx]]
+            process = Popen(command, stdout=PIPE, stderr=PIPE, cwd=self.pool_path[pool_idx])
+            stdout, stderr = process.communicate()
+            process.wait()
+            if stderr:
+                print("stderrstderr: ", stderr, sol)
+                return [-float('Inf')] * len(fitness_obj)
+            else:
+                try:
+                    stats = parse_timeloop_stats(self.pool_path[pool_idx])
+                    # stats = extract_timeloop_perf(self.pool_path[pool_idx])
+                    fitness = self.judge_IO(stats, fitness_obj)
+                except Exception as e:
+                    print("Exception: ", e)
+                    fitness = [-float('Inf')] * len(fitness_obj)
+                return fitness
         else:
-            try:
-                stats = parse_timeloop_stats(self.pool_path[pool_idx])
-                fitness = self.judge_IO(stats, fitness_obj)
-            except Exception as e:
-                print("Exception: ", e)
-                fitness = [-float('Inf')] * len(fitness_obj)
+            # cfg = {}
+            # cfg.update(arch)
+            # cfg.update(map)
+            # cfg.update(problem)
+            # cfg.update(self.art)
+            # cfg.update(self.ert)
+            cfg = copy.deepcopy(self.shared_cfg)
+            cfg.update(map)
+            config = ConfigDict(cfg)
+            if not self.debug:
+                with stdout_redirected():
+                    try:
+                        timeloop_app = Model(config,'.')
+                        eval_stats = timeloop_app.run()
+                        fitness = self.judge(eval_stats, fitness_obj)
+                    except:
+                        fitness = [-float('Inf')] * len(fitness_obj)
+            else:
+                # print(sol)
+                self.dump_timeloop_config_files(dimension, sol, './report/')
+                timeloop_app = Model(config,'.')
+                eval_stats = timeloop_app.run()
+                fitness = self.judge(eval_stats, fitness_obj)
+                # print(fitness)
             return fitness
 
     def judge_IO(self, stats, fitness_obj='all'):
