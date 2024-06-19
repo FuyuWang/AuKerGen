@@ -339,7 +339,7 @@ class Environment(object):
             fd.write(f'{stats}')
         stats = np.array(stats).reshape(1, -1)
         df = pd.DataFrame(stats, columns=columns)
-        df.to_csv(os.path.join(dir_path,'Gamma-Timeloop.csv'))
+        df.to_csv(os.path.join(dir_path,'Timeloop.csv'))
 
     def record_chkpt(self, write=False):
         self.best_fitness_record.append(self.best_fitness)
