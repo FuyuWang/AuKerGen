@@ -38,9 +38,9 @@ def compute_policy_loss(rewards, log_probs, log_prob_masks):
         fail_idx = random.sample(fail_idx, 3*len(success_idx))
     print(len(success_idx), len(fail_idx), rewards[-1, :])
 
-    rewards = rewards[7:]
-    log_probs = log_probs[:-7]
-    log_prob_masks = log_prob_masks[:-7]
+    rewards = rewards[4:]
+    log_probs = log_probs[:-4]
+    log_prob_masks = log_prob_masks[:-4]
 
     R = np.zeros(batch_size)
     for r in rewards[::-1]:
